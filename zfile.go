@@ -34,39 +34,41 @@ func CDerive(path string) Compressor {
 	}
 }
 
+func cDecoder(inner io.ReadCloser, ctype Compressor) (io.ReadCloser, error) {
+	switch ctype {
+	case CGzip:
+		return gzip.NewReader(inner)
+	case CZstd:
+		decoder, err := zstd.NewReader(inner)
+		if err != nil {
+			return nil, err
+		}
+		return decoder.IOReadCloser(), nil
+	case CXz:
+		decoder, err := xz.NewReader(inner)
+		if err != nil {
+			return nil, err
+		}
+		return io.NopCloser(decoder), nil
+	}
+	return nil, nil
+}
+
 func OpenType(path string, ctype Compressor) (io.ReadCloser, error) {
 	inner, err := os.Open(path)
 	if err != nil {
 		return nil, err
 	}
 
-	switch ctype {
-	case CGzip:
-		outer, err := gzip.NewReader(inner)
-		if err != nil {
-			inner.Close()
-			return nil, err
-		}
-		return &wrappedReadCloser{
-			wrappedCloser: inner,
-			readCloser:    outer,
-		}, nil
-	case CZstd:
-		decoder, err := zstd.NewReader(inner)
-		if err != nil {
-			return nil, err
-		}
-		outer := decoder.IOReadCloser()
-		return &wrappedReadCloser{
-			wrappedCloser: inner,
-			readCloser:    outer,
-		}, nil
-	case CXz:
-		decoder, err := xz.NewReader(inner)
-		if err != nil {
-			return nil, err
-		}
-		outer := io.NopCloser(decoder)
+	// NOTE: Take care that inner does not escape.
+
+	outer, err := cDecoder(inner, ctype)
+	if err != nil {
+		inner.Close()
+		return nil, err
+	}
+
+	if outer != nil {
 		return &wrappedReadCloser{
 			wrappedCloser: inner,
 			readCloser:    outer,
@@ -80,47 +82,42 @@ func Open(path string) (io.ReadCloser, error) {
 	return OpenType(path, CDerive(path))
 }
 
+func cEncoder(inner io.WriteCloser, ctype Compressor) (io.WriteCloser, error) {
+	switch ctype {
+	case CGzip:
+		return gzip.NewWriterLevel(inner, gzip.BestCompression)
+	case CZstd:
+		return zstd.NewWriter(
+			inner,
+			zstd.WithEncoderLevel(zstd.SpeedBestCompression),
+		)
+	case CXz:
+		return xz.NewWriter(inner)
+	}
+	return nil, nil
+}
+
 func CreateType(path string, ctype Compressor) (io.WriteCloser, error) {
 	inner, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0666)
 	if err != nil {
 		return nil, err
 	}
 
-	switch ctype {
-	case CGzip:
-		outer, err := gzip.NewWriterLevel(inner, gzip.BestCompression)
-		if err != nil {
-			inner.Close()
-			return nil, err
-		}
-		return &wrappedWriteCloser{
-			wrappedCloser: inner,
-			writeCloser:   outer,
-		}, nil
-	case CZstd:
-		outer, err := zstd.NewWriter(
-			inner,
-			zstd.WithEncoderLevel(zstd.SpeedBestCompression),
-		)
-		if err != nil {
-			inner.Close()
-			return nil, err
-		}
-		return &wrappedWriteCloser{
-			wrappedCloser: inner,
-			writeCloser:   outer,
-		}, nil
-	case CXz:
-		outer, err := xz.NewWriter(inner)
-		if err != nil {
-			inner.Close()
-			return nil, err
-		}
+	// NOTE: Take care that inner does not escape.
+
+	outer, err := cEncoder(inner, ctype)
+	if err != nil {
+		inner.Close()
+		return nil, err
+	}
+
+	if outer != nil {
 		return &wrappedWriteCloser{
 			wrappedCloser: inner,
 			writeCloser:   outer,
 		}, nil
 	}
+
 	return inner, nil
 }
 
