@@ -4,7 +4,6 @@
 #
 # Why a Makefile at all?  Because otherwise I just end up with a file full
 # of command-lines to copy/paste.
-main_package_path = ./
 
 ## test: run tests
 .PHONY: test
