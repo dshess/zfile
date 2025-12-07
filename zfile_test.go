@@ -1,6 +1,7 @@
 package zfile
 
 import (
+	"compress/gzip"
 	"io"
 	"os"
 	"path/filepath"
@@ -20,6 +21,31 @@ func TestZfileRead(t *testing.T) {
 
 		err := os.WriteFile(path, []byte(testdata), 0666)
 		require.Nil(t, err)
+
+		in, err := Open(path)
+		require.Nil(t, err)
+		defer in.Close()
+
+		data, err := io.ReadAll(in)
+		require.Nil(t, err)
+
+		assert.Equal(t, testdata, string(data))
+	})
+
+	t.Run("gzip", func(t *testing.T) {
+		path := filepath.Join(tmpDir, "file.gz")
+
+		out, err := os.Create(path)
+		require.Nil(t, err)
+		require.NotNil(t, out)
+
+		writer := gzip.NewWriter(out)
+		require.NotNil(t, writer)
+
+		_, err = writer.Write([]byte(testdata))
+		require.Nil(t, err)
+		require.Nil(t, writer.Close())
+		require.Nil(t, out.Close())
 
 		in, err := Open(path)
 		require.Nil(t, err)
@@ -52,6 +78,35 @@ func TestZfileWrite(t *testing.T) {
 
 		data, err := os.ReadFile(path)
 		require.Nil(t, err)
+
+		assert.Equal(t, testdata, string(data))
+	})
+
+	t.Run("gzip", func(t *testing.T) {
+		path := filepath.Join(tmpDir, "file.gz")
+
+		out, err := Create(path)
+		require.Nil(t, err)
+		defer out.Close()
+
+		_, err = io.WriteString(out, testdata)
+		require.Nil(t, err)
+
+		err = out.Close()
+		require.Nil(t, err)
+
+		in, err := os.Open(path)
+		require.Nil(t, err)
+		defer in.Close()
+
+		decoder, err := gzip.NewReader(in)
+		require.Nil(t, err)
+
+		data, err := io.ReadAll(decoder)
+		require.Nil(t, err)
+
+		require.Nil(t, decoder.Close())
+		require.Nil(t, in.Close())
 
 		assert.Equal(t, testdata, string(data))
 	})
