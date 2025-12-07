@@ -10,14 +10,38 @@ import (
 	"github.com/ulikunitz/xz"
 )
 
-func Open(path string) (io.ReadCloser, error) {
+type Compressor int
+
+const (
+	CSuffix Compressor = iota
+	CGzip
+	CZstd
+	CXz
+	CNone
+	CError
+)
+
+func CDerive(path string) Compressor {
+	switch filepath.Ext(path) {
+	case ".gz":
+		return CGzip
+	case ".zst":
+		return CZstd
+	case ".xz":
+		return CXz
+	default:
+		return CNone
+	}
+}
+
+func OpenType(path string, ctype Compressor) (io.ReadCloser, error) {
 	inner, err := os.Open(path)
 	if err != nil {
 		return nil, err
 	}
 
-	switch filepath.Ext(path) {
-	case ".gz":
+	switch ctype {
+	case CGzip:
 		outer, err := gzip.NewReader(inner)
 		if err != nil {
 			inner.Close()
@@ -27,7 +51,7 @@ func Open(path string) (io.ReadCloser, error) {
 			wrappedCloser: inner,
 			readCloser:    outer,
 		}, nil
-	case ".zst":
+	case CZstd:
 		decoder, err := zstd.NewReader(inner)
 		if err != nil {
 			return nil, err
@@ -37,7 +61,7 @@ func Open(path string) (io.ReadCloser, error) {
 			wrappedCloser: inner,
 			readCloser:    outer,
 		}, nil
-	case ".xz":
+	case CXz:
 		decoder, err := xz.NewReader(inner)
 		if err != nil {
 			return nil, err
@@ -52,14 +76,18 @@ func Open(path string) (io.ReadCloser, error) {
 	return inner, nil
 }
 
-func Create(path string) (io.WriteCloser, error) {
+func Open(path string) (io.ReadCloser, error) {
+	return OpenType(path, CDerive(path))
+}
+
+func CreateType(path string, ctype Compressor) (io.WriteCloser, error) {
 	inner, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0666)
 	if err != nil {
 		return nil, err
 	}
 
-	switch filepath.Ext(path) {
-	case ".gz":
+	switch ctype {
+	case CGzip:
 		outer, err := gzip.NewWriterLevel(inner, gzip.BestCompression)
 		if err != nil {
 			inner.Close()
@@ -69,7 +97,7 @@ func Create(path string) (io.WriteCloser, error) {
 			wrappedCloser: inner,
 			writeCloser:   outer,
 		}, nil
-	case ".zst":
+	case CZstd:
 		outer, err := zstd.NewWriter(
 			inner,
 			zstd.WithEncoderLevel(zstd.SpeedBestCompression),
@@ -82,7 +110,7 @@ func Create(path string) (io.WriteCloser, error) {
 			wrappedCloser: inner,
 			writeCloser:   outer,
 		}, nil
-	case ".xz":
+	case CXz:
 		outer, err := xz.NewWriter(inner)
 		if err != nil {
 			inner.Close()
@@ -94,6 +122,10 @@ func Create(path string) (io.WriteCloser, error) {
 		}, nil
 	}
 	return inner, nil
+}
+
+func Create(path string) (io.WriteCloser, error) {
+	return CreateType(path, CDerive(path))
 }
 
 type wrappedReadCloser struct {
