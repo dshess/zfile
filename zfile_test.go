@@ -11,6 +11,25 @@ import (
 )
 
 func TestZfileRead(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	const testdata = "This is a test"
+
+	t.Run("plain", func(t *testing.T) {
+		path := filepath.Join(tmpDir, "file")
+
+		err := os.WriteFile(path, []byte(testdata), 0666)
+		require.Nil(t, err)
+
+		in, err := Open(path)
+		require.Nil(t, err)
+		defer in.Close()
+
+		data, err := io.ReadAll(in)
+		require.Nil(t, err)
+
+		assert.Equal(t, testdata, string(data))
+	})
 }
 
 func TestZfileWrite(t *testing.T) {
