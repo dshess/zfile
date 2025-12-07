@@ -21,7 +21,9 @@ const (
 	CError
 )
 
-// Return a compression type based on extension.
+// Return a compression type based on extension.  Useful for cases like
+// setting the compression when writing to a temporary file which will be
+// renamed into place on completion.
 func CDerive(path string) Compressor {
 	switch filepath.Ext(path) {
 	case ".gz":
