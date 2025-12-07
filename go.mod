@@ -5,6 +5,7 @@ go 1.25.5
 require (
 	github.com/klauspost/compress v1.18.2
 	github.com/stretchr/testify v1.11.1
+	github.com/ulikunitz/xz v0.5.15
 )
 
 require (

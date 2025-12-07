@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 
 	"github.com/klauspost/compress/zstd"
+	"github.com/ulikunitz/xz"
 )
 
 func Open(path string) (io.ReadCloser, error) {
@@ -32,6 +33,16 @@ func Open(path string) (io.ReadCloser, error) {
 			return nil, err
 		}
 		outer := decoder.IOReadCloser()
+		return &wrappedReadCloser{
+			wrappedCloser: inner,
+			readCloser:    outer,
+		}, nil
+	case ".xz":
+		decoder, err := xz.NewReader(inner)
+		if err != nil {
+			return nil, err
+		}
+		outer := io.NopCloser(decoder)
 		return &wrappedReadCloser{
 			wrappedCloser: inner,
 			readCloser:    outer,
@@ -63,6 +74,16 @@ func Create(path string) (io.WriteCloser, error) {
 			inner,
 			zstd.WithEncoderLevel(zstd.SpeedBestCompression),
 		)
+		if err != nil {
+			inner.Close()
+			return nil, err
+		}
+		return &wrappedWriteCloser{
+			wrappedCloser: inner,
+			writeCloser:   outer,
+		}, nil
+	case ".xz":
+		outer, err := xz.NewWriter(inner)
 		if err != nil {
 			inner.Close()
 			return nil, err
