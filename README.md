@@ -1,4 +1,4 @@
-# opts
+# zfile
 
 [![Go Reference](https://pkg.go.dev/badge/github.com/dshess/zfile.svg)](https://pkg.go.dev/github.com/dshess/zfile)
 [![Go Report Card](https://goreportcard.com/badge/github.com/dshess/zfile)](https://goreportcard.com/report/github.com/dshess/zfile)
