@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/klauspost/compress/zstd"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -40,6 +42,32 @@ func TestZfileRead(t *testing.T) {
 		require.NotNil(t, out)
 
 		writer := gzip.NewWriter(out)
+		require.NotNil(t, writer)
+
+		_, err = writer.Write([]byte(testdata))
+		require.Nil(t, err)
+		require.Nil(t, writer.Close())
+		require.Nil(t, out.Close())
+
+		in, err := Open(path)
+		require.Nil(t, err)
+		defer in.Close()
+
+		data, err := io.ReadAll(in)
+		require.Nil(t, err)
+
+		assert.Equal(t, testdata, string(data))
+	})
+
+	t.Run("zstd", func(t *testing.T) {
+		path := filepath.Join(tmpDir, "file.zst")
+
+		out, err := os.Create(path)
+		require.Nil(t, err)
+		require.NotNil(t, out)
+
+		writer, err := zstd.NewWriter(out)
+		require.Nil(t, err)
 		require.NotNil(t, writer)
 
 		_, err = writer.Write([]byte(testdata))
@@ -106,6 +134,35 @@ func TestZfileWrite(t *testing.T) {
 		require.Nil(t, err)
 
 		require.Nil(t, decoder.Close())
+		require.Nil(t, in.Close())
+
+		assert.Equal(t, testdata, string(data))
+	})
+
+	t.Run("zstd", func(t *testing.T) {
+		path := filepath.Join(tmpDir, "file.zst")
+
+		out, err := Create(path)
+		require.Nil(t, err)
+		defer out.Close()
+
+		_, err = io.WriteString(out, testdata)
+		require.Nil(t, err)
+
+		err = out.Close()
+		require.Nil(t, err)
+
+		in, err := os.Open(path)
+		require.Nil(t, err)
+		defer in.Close()
+
+		decoder, err := zstd.NewReader(in)
+		require.Nil(t, err)
+
+		data, err := io.ReadAll(decoder)
+		require.Nil(t, err)
+
+		decoder.Close()
 		require.Nil(t, in.Close())
 
 		assert.Equal(t, testdata, string(data))

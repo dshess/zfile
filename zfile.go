@@ -5,6 +5,8 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+
+	"github.com/klauspost/compress/zstd"
 )
 
 func Open(path string) (io.ReadCloser, error) {
@@ -13,12 +15,23 @@ func Open(path string) (io.ReadCloser, error) {
 		return nil, err
 	}
 
-	if filepath.Ext(path) == ".gz" {
+	switch filepath.Ext(path) {
+	case ".gz":
 		outer, err := gzip.NewReader(inner)
 		if err != nil {
 			inner.Close()
 			return nil, err
 		}
+		return &wrappedReadCloser{
+			wrappedCloser: inner,
+			readCloser:    outer,
+		}, nil
+	case ".zst":
+		decoder, err := zstd.NewReader(inner)
+		if err != nil {
+			return nil, err
+		}
+		outer := decoder.IOReadCloser()
 		return &wrappedReadCloser{
 			wrappedCloser: inner,
 			readCloser:    outer,
@@ -34,8 +47,22 @@ func Create(path string) (io.WriteCloser, error) {
 		return nil, err
 	}
 
-	if filepath.Ext(path) == ".gz" {
+	switch filepath.Ext(path) {
+	case ".gz":
 		outer, err := gzip.NewWriterLevel(inner, gzip.BestCompression)
+		if err != nil {
+			inner.Close()
+			return nil, err
+		}
+		return &wrappedWriteCloser{
+			wrappedCloser: inner,
+			writeCloser:   outer,
+		}, nil
+	case ".zst":
+		outer, err := zstd.NewWriter(
+			inner,
+			zstd.WithEncoderLevel(zstd.SpeedBestCompression),
+		)
 		if err != nil {
 			inner.Close()
 			return nil, err
